@@ -1,5 +1,4 @@
 import requests
-import json
 
 url = "http://api.open-notify.org/astros.json"
 response = requests.get(url)
