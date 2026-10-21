@@ -78,7 +78,6 @@ async def main():
             try:
                 result = await shazam.recognize(file)
 
-                # Check if Shazam actually found a track
                 if "track" not in result:
                     print("    Shazam could not recognize this file.")
                     not_recognized.append(file.name)
@@ -89,17 +88,13 @@ async def main():
                 track_title = track["title"]
                 track_artist = track["subtitle"]
                 track_album = get_album(track)
-
-                # Get artwork URL
                 artwork_url = track["images"]["coverart"]
 
-                # Download artwork
                 artwork = await download_artwork(
                     session,
                     artwork_url,
                 )
 
-                # Save everything to the audio file
                 save_metadata(
                     file,
                     track_title,
