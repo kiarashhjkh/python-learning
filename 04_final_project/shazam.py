@@ -45,18 +45,20 @@ async def download_artwork(session, artwork_url: str) -> bytes:
 
 
 def save_metadata(
-    file: Path,
-    title: str,
-    artist: str,
-    album: str,
-    artwork: bytes,
+        file: Path,
+        title: str,
+        artist: str,
+        album: str,
+        artwork: bytes,
 ):
     music_file = music_tag.load_file(file)
 
     music_file["tracktitle"] = title
     music_file["artist"] = artist
     music_file["album"] = album
-    music_file["artwork"] = artwork
+
+    if artwork is not None:
+        music_file["artwork"] = artwork
 
     music_file.save()
 
@@ -64,9 +66,10 @@ def save_metadata(
 async def main():
     audio_files = get_audio_files(MUSIC_FOLDER)
 
-    shazam = Shazam(segment_duration_seconds=10)
+    shazam = Shazam(segment_duration_seconds=12)
 
     not_recognized = []
+    errors = []
 
     print(f"Found {len(audio_files)} audio files.")
 
@@ -76,7 +79,7 @@ async def main():
             print(f"[{index}/{len(audio_files)}] {file.name}")
 
             try:
-                result = await shazam.recognize(file)
+                result = await asyncio.wait_for(shazam.recognize(file), 30)
 
                 if "track" not in result:
                     print("    Shazam could not recognize this file.")
@@ -88,12 +91,17 @@ async def main():
                 track_title = track["title"]
                 track_artist = track["subtitle"]
                 track_album = get_album(track)
-                artwork_url = track["images"]["coverart"]
+                artwork_url = track.get("images", {}).get("coverart")
 
-                artwork = await download_artwork(
-                    session,
-                    artwork_url,
-                )
+                if artwork_url:
+                    artwork = await download_artwork(
+                        session,
+                        artwork_url,
+                    )
+                    artwork_status = "Updated"
+                else:
+                    artwork = None
+                    artwork_status = "Not available"
 
                 save_metadata(
                     file,
@@ -106,12 +114,19 @@ async def main():
                 print(f"    Album: {track_album}")
                 print(f"    Artist: {track_artist}")
                 print(f"    Title: {track_title}")
-                print("    Artwork: Updated")
+                print(f"    Artwork: {artwork_status}")
                 print("    Metadata: Saved")
+
+            except asyncio.TimeoutError:
+                print("    Shazam timed out.")
+                errors.append(file.name)
+
 
             except Exception as e:
                 print(f"    Error: {e}")
-                not_recognized.append(file.name)
+                errors.append(file.name)
+
+            await asyncio.sleep(2)
 
     print()
     print("==============================")
@@ -126,6 +141,13 @@ async def main():
         print("Files Shazam could not recognize:")
 
         for file_name in not_recognized:
+            print(f"    {file_name}")
+
+    if errors:
+        print()
+        print("Files with errors:")
+
+        for file_name in errors:
             print(f"    {file_name}")
 
 
